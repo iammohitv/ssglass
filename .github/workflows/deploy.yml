@@ -28,10 +28,10 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # ✅ Make Vite definitely read env at build time
+      # ✅ QUOTED so Vite dotenv reads JSON correctly
       - name: Create .env.production from GitHub Secret
         run: |
-          echo "VITE_APP_USERS=${{ secrets.VITE_APP_USERS }}" > .env.production
+          echo "VITE_APP_USERS='${{ secrets.VITE_APP_USERS }}'" > .env.production
           node -e "console.log('env file created:', require('fs').existsSync('.env.production'))"
 
       - name: Build

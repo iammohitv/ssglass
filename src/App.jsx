@@ -43,7 +43,13 @@ function safeFileName(name) {
 // ===== USERS FROM ENV =====
 // Expect: VITE_APP_USERS=[{"u":"admin","p":"admin123"}, ...]
 function getUsersFromEnv() {
-  const raw = import.meta.env.VITE_APP_USERS;
+  let raw = import.meta.env.VITE_APP_USERS;
+  if (typeof raw === "string") raw = raw.trim();
+
+  // handle if dotenv kept surrounding quotes
+  if (raw && ((raw.startsWith("'") && raw.endsWith("'")) || (raw.startsWith('"') && raw.endsWith('"')))) {
+    raw = raw.slice(1, -1);
+  }
 
   if (!raw) {
     return {
