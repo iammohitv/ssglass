@@ -40,19 +40,36 @@ function safeFileName(name) {
   );
 }
 
-// ===== ENV USERS =====
-// VITE_APP_USERS=[{"u":"admin","p":"admin123"},{"u":"staff1","p":"staff123"}]
+// ===== USERS FROM ENV =====
+// Expect: VITE_APP_USERS=[{"u":"admin","p":"admin123"}, ...]
 function getUsersFromEnv() {
   const raw = import.meta.env.VITE_APP_USERS;
-  if (!raw) return [];
+
+  if (!raw) {
+    return {
+      users: [],
+      error: "VITE_APP_USERS is missing in the deployed build. (import.meta.env.VITE_APP_USERS is empty)",
+    };
+  }
+
   try {
     const parsed = JSON.parse(raw);
-    if (!Array.isArray(parsed)) return [];
-    return parsed
+
+    if (!Array.isArray(parsed)) {
+      return { users: [], error: "VITE_APP_USERS must be a JSON array of {u,p} objects." };
+    }
+
+    const users = parsed
       .filter((x) => x && typeof x.u === "string" && typeof x.p === "string")
       .map((x) => ({ u: x.u.trim(), p: x.p }));
+
+    if (!users.length) {
+      return { users: [], error: "VITE_APP_USERS parsed but no valid users found." };
+    }
+
+    return { users, error: "" };
   } catch {
-    return [];
+    return { users: [], error: "VITE_APP_USERS is not valid JSON. Use double quotes only." };
   }
 }
 
@@ -145,7 +162,7 @@ function calcHalfCapsule({ H, W }) {
   ];
 }
 
-// ===== PDF TABLE =====
+// ===== PDF TABLE (colored + bordered) =====
 function drawTable(doc, startX, startY, tableWidth, rows, options = {}) {
   const {
     headerLeft = "Output",
@@ -210,7 +227,7 @@ function drawTable(doc, startX, startY, tableWidth, rows, options = {}) {
 
 // ===== Login Component =====
 function Login({ onLogin }) {
-  const users = useMemo(() => getUsersFromEnv(), []);
+  const { users, error } = useMemo(() => getUsersFromEnv(), []);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
@@ -220,7 +237,7 @@ function Login({ onLogin }) {
     setErr("");
 
     if (users.length === 0) {
-      setErr("No users configured. Add VITE_APP_USERS in your .env file.");
+      setErr(error || "No users configured.");
       return;
     }
 
@@ -258,7 +275,7 @@ function Login({ onLogin }) {
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
           </div>
 
-          {err && <div className="hint">{err}</div>}
+          {(err || error) && <div className="hint">{err || error}</div>}
 
           <div className="actions">
             <button className="primary" type="submit" disabled={!username.trim() || !password}>
@@ -271,7 +288,7 @@ function Login({ onLogin }) {
   );
 }
 
-// ===== Calculator Component (all calculator hooks live here) =====
+// ===== Calculator Component =====
 function Calculator({ authedUser, onLogout }) {
   const [mode, setMode] = useState("ROUND");
   const [name, setName] = useState("");
@@ -496,21 +513,6 @@ function Calculator({ authedUser, onLogout }) {
           <button className="primary" disabled={!isNameValid} onClick={downloadPdf} type="button">
             Download PDF
           </button>
-
-          <button
-            className="ghost"
-            type="button"
-            onClick={() => {
-              setName("");
-              setSize("");
-              setHeightIn("");
-              setWidthIn("");
-              setH("");
-              setW("");
-            }}
-          >
-            Clear All
-          </button>
         </div>
       </div>
     </div>
@@ -526,9 +528,7 @@ export default function App() {
     setAuthedUser("");
   };
 
-  if (!authedUser) {
-    return <Login onLogin={(u) => setAuthedUser(u)} />;
-  }
+  if (!authedUser) return <Login onLogin={setAuthedUser} />;
 
   return <Calculator authedUser={authedUser} onLogout={logout} />;
 }

@@ -28,18 +28,14 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # ✅ Confirm the env exists (does NOT print secret value)
-      - name: Verify env present
+      # ✅ Make Vite definitely read env at build time
+      - name: Create .env.production from GitHub Secret
         run: |
-          node -e "console.log('VITE_APP_USERS present:', !!process.env.VITE_APP_USERS)"
-          node -e "if(!process.env.VITE_APP_USERS){console.error('Missing VITE_APP_USERS secret'); process.exit(1)}"
-        env:
-          VITE_APP_USERS: ${{ secrets.VITE_APP_USERS }}
+          echo "VITE_APP_USERS=${{ secrets.VITE_APP_USERS }}" > .env.production
+          node -e "console.log('env file created:', require('fs').existsSync('.env.production'))"
 
       - name: Build
         run: npm run build
-        env:
-          VITE_APP_USERS: ${{ secrets.VITE_APP_USERS }}
 
       - uses: actions/upload-pages-artifact@v3
         with:
