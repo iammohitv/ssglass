@@ -28,14 +28,19 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # ✅ QUOTED so Vite dotenv reads JSON correctly
-      - name: Create .env.production from GitHub Secret
+      # ✅ Verify the secret exists (does NOT print it)
+      - name: Verify env present
         run: |
-          echo "VITE_APP_USERS='${{ secrets.VITE_APP_USERS }}'" > .env.production
-          node -e "console.log('env file created:', require('fs').existsSync('.env.production'))"
+          node -e "console.log('VITE_APP_USERS present:', !!process.env.VITE_APP_USERS)"
+          node -e "if(!process.env.VITE_APP_USERS){console.error('Missing VITE_APP_USERS secret'); process.exit(1)}"
+        env:
+          VITE_APP_USERS: ${{ secrets.VITE_APP_USERS }}
 
+      # ✅ Pass secret directly into build (avoid dotenv parsing issues)
       - name: Build
         run: npm run build
+        env:
+          VITE_APP_USERS: ${{ secrets.VITE_APP_USERS }}
 
       - uses: actions/upload-pages-artifact@v3
         with:

@@ -44,25 +44,33 @@ function safeFileName(name) {
 // Expect: VITE_APP_USERS=[{"u":"admin","p":"admin123"}, ...]
 function getUsersFromEnv() {
   let raw = import.meta.env.VITE_APP_USERS;
-  if (typeof raw === "string") raw = raw.trim();
-
-  // handle if dotenv kept surrounding quotes
-  if (raw && ((raw.startsWith("'") && raw.endsWith("'")) || (raw.startsWith('"') && raw.endsWith('"')))) {
-    raw = raw.slice(1, -1);
-  }
 
   if (!raw) {
-    return {
-      users: [],
-      error: "VITE_APP_USERS is missing in the deployed build. (import.meta.env.VITE_APP_USERS is empty)",
-    };
+    return { users: [], error: "VITE_APP_USERS is missing in the deployed build (import.meta.env empty)." };
+  }
+
+  // normalize
+  raw = String(raw).trim();
+
+  // Strip wrapping quotes if present
+  if (
+    (raw.startsWith("'") && raw.endsWith("'")) ||
+    (raw.startsWith('"') && raw.endsWith('"'))
+  ) {
+    raw = raw.slice(1, -1).trim();
   }
 
   try {
-    const parsed = JSON.parse(raw);
+    // Attempt #1: normal JSON array
+    let parsed = JSON.parse(raw);
+
+    // If it parsed into a STRING, it's double-encoded JSON, parse again
+    if (typeof parsed === "string") {
+      parsed = JSON.parse(parsed);
+    }
 
     if (!Array.isArray(parsed)) {
-      return { users: [], error: "VITE_APP_USERS must be a JSON array of {u,p} objects." };
+      return { users: [], error: "VITE_APP_USERS must be a JSON array like [{\"u\":\"x\",\"p\":\"y\"}]." };
     }
 
     const users = parsed
@@ -75,9 +83,15 @@ function getUsersFromEnv() {
 
     return { users, error: "" };
   } catch {
-    return { users: [], error: "VITE_APP_USERS is not valid JSON. Use double quotes only." };
+    return {
+      users: [],
+      error:
+        "VITE_APP_USERS is not valid JSON in the deployed build. Ensure the GitHub secret is exactly like: " +
+        '[{"u":"admin","p":"admin123"}]',
+    };
   }
 }
+
 
 function verifyLogin(username, password, users) {
   const u = (username || "").trim();
