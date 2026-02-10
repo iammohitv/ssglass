@@ -3,6 +3,7 @@ name: Deploy to GitHub Pages
 on:
   push:
     branches: ["main"]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -24,9 +25,16 @@ jobs:
           node-version: 20
           cache: npm
 
-      # ✅ Install dependencies (this is what you’re missing)
       - name: Install dependencies
         run: npm ci
+
+      # ✅ Confirm the env exists (does NOT print secret value)
+      - name: Verify env present
+        run: |
+          node -e "console.log('VITE_APP_USERS present:', !!process.env.VITE_APP_USERS)"
+          node -e "if(!process.env.VITE_APP_USERS){console.error('Missing VITE_APP_USERS secret'); process.exit(1)}"
+        env:
+          VITE_APP_USERS: ${{ secrets.VITE_APP_USERS }}
 
       - name: Build
         run: npm run build
