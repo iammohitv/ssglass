@@ -45,7 +45,7 @@ function normalizeEnvString(raw) {
   if (raw == null) return "";
   let s = String(raw).trim();
 
-  // remove wrapping quotes if dotenv left them
+  // Strip wrapping quotes if they exist
   if (
     (s.startsWith("'") && s.endsWith("'")) ||
     (s.startsWith('"') && s.endsWith('"'))
@@ -56,21 +56,22 @@ function normalizeEnvString(raw) {
   return s;
 }
 
-function parseUsersFromEnvString(raw) {
+function getUsersFromEnv() {
+  const raw = import.meta.env.VITE_APP_USERS;
   const s = normalizeEnvString(raw);
+
   if (!s) {
     return {
       users: [],
-      error: "VITE_APP_USERS is missing in the deployed build (import.meta.env.VITE_APP_USERS is empty).",
-      debug: { preview: "", length: 0, type: typeof raw },
+      error: "No users configured. VITE_APP_USERS is missing in the deployed build.",
     };
   }
 
   try {
-    // Attempt #1: normal JSON
+    // Attempt #1: parse normal JSON
     let parsed = JSON.parse(s);
 
-    // If parsed is a string, it's double-encoded JSON -> parse again
+    // If it parsed into a STRING, it’s double-encoded JSON -> parse again
     if (typeof parsed === "string") {
       parsed = JSON.parse(parsed);
     }
@@ -79,7 +80,6 @@ function parseUsersFromEnvString(raw) {
       return {
         users: [],
         error: "VITE_APP_USERS must be a JSON array like [{\"u\":\"admin\",\"p\":\"admin123\"}].",
-        debug: { preview: s.slice(0, 40), length: s.length, type: typeof raw },
       };
     }
 
@@ -90,28 +90,17 @@ function parseUsersFromEnvString(raw) {
     if (!users.length) {
       return {
         users: [],
-        error: "VITE_APP_USERS parsed but no valid users found (need objects with u and p).",
-        debug: { preview: s.slice(0, 40), length: s.length, type: typeof raw },
+        error: "VITE_APP_USERS parsed but no valid users found.",
       };
     }
 
-    return {
-      users,
-      error: "",
-      debug: { preview: s.slice(0, 40), length: s.length, type: typeof raw },
-    };
+    return { users, error: "" };
   } catch {
     return {
       users: [],
-      error: "VITE_APP_USERS is not valid JSON in the deployed build.",
-      debug: { preview: s.slice(0, 60), length: s.length, type: typeof raw },
+      error: "VITE_APP_USERS is not valid JSON. Use double quotes only.",
     };
   }
-}
-
-function getUsersFromEnv() {
-  const raw = import.meta.env.VITE_APP_USERS;
-  return parseUsersFromEnvString(raw);
 }
 
 function verifyLogin(username, password, users) {
@@ -155,6 +144,7 @@ function calcSquareRect({ heightIn, widthIn }) {
 
   const totalRawFt = ((heightIn + widthIn) * 2) / 12;
 
+  // Requirement: do NOT show final size height/width
   return [
     { label: "1ST MARK", value: mark1, unit: "" },
     { label: "2ND MARK", value: mark2, unit: "" },
@@ -202,7 +192,7 @@ function calcHalfCapsule({ H, W }) {
   ];
 }
 
-// ===== PDF TABLE =====
+// ===== PDF TABLE (colored + bordered) =====
 function drawTable(doc, startX, startY, tableWidth, rows, options = {}) {
   const {
     headerLeft = "Output",
@@ -267,9 +257,7 @@ function drawTable(doc, startX, startY, tableWidth, rows, options = {}) {
 
 // ===== Login =====
 function Login({ onLogin }) {
-  const envInfo = useMemo(() => getUsersFromEnv(), []);
-  const { users, error, debug } = envInfo;
-
+  const { users, error } = useMemo(() => getUsersFromEnv(), []);
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [err, setErr] = useState("");
@@ -279,7 +267,7 @@ function Login({ onLogin }) {
     setErr("");
 
     if (users.length === 0) {
-      setErr(error || "No users configured.");
+      setErr(error || "No users configured. Add VITE_APP_USERS in your .env file.");
       return;
     }
 
@@ -317,12 +305,7 @@ function Login({ onLogin }) {
             <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
           </div>
 
-          {(err || error) && <div className="hint">{err || error}</div>}
-
-          {/* Safe debug (does NOT show full secret) */}
-          <div style={{ marginTop: 8, fontSize: 12, color: "#6b7280" }}>
-            Debug: envType={debug?.type}, envLen={debug?.length}, envPreview="{debug?.preview}"
-          </div>
+          {(err || (users.length === 0 && error)) && <div className="hint">{err || error}</div>}
 
           <div className="actions">
             <button className="primary" type="submit" disabled={!username.trim() || !password}>
@@ -346,6 +329,7 @@ function Calculator({ authedUser, onLogout }) {
   const [H, setH] = useState("");
   const [W, setW] = useState("");
 
+  // Reset name whenever inputs change
   useEffect(() => {
     setName("");
   }, [mode, size, heightIn, widthIn, H, W]);
@@ -452,7 +436,7 @@ function Calculator({ authedUser, onLogout }) {
           <div>
             <h1>SSG Glass Frame Calculator</h1>
             <p className="sub">
-              Logged in as <b>{authedUser}</b>
+              Logged in as <b>{authedUser}</b> • Select a sheet → enter inputs → outputs → name → PDF
             </p>
           </div>
           <div className="badge">
@@ -460,6 +444,7 @@ function Calculator({ authedUser, onLogout }) {
             <button
               onClick={onLogout}
               style={{ border: "none", background: "transparent", fontWeight: 900, cursor: "pointer" }}
+              title="Logout"
               type="button"
             >
               Logout
@@ -467,13 +452,95 @@ function Calculator({ authedUser, onLogout }) {
           </div>
         </div>
 
-        {/* Keep your existing UI below (inputs table outputs etc.) */}
-        {/* If your current UI differs, paste it and I’ll merge cleanly */}
-        <div style={{ marginTop: 14, color: "#6b7280" }}>
-          Your calculator UI should remain here (same as your previous version).
+        <div className="controls">
+          <div className="field">
+            <label>Sheet</label>
+            <select value={mode} onChange={(e) => setMode(e.target.value)}>
+              {OPTIONS.map((o) => (
+                <option key={o.key} value={o.key}>
+                  {o.label}
+                </option>
+              ))}
+            </select>
+          </div>
+
+          <div className="field grow">
+            <label>Name (required for PDF)</label>
+            <input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Rahul Sharma" />
+            {!isNameValid && <div className="hint">Enter name to enable Download PDF.</div>}
+          </div>
         </div>
 
-        <div className="actions" style={{ marginTop: 16 }}>
+        <div className="divider" />
+
+        <div className="sectionTitle">Inputs</div>
+
+        {mode === "ROUND" && (
+          <div className="grid">
+            <div className="field">
+              <label>Size</label>
+              <input value={size} onChange={(e) => setSize(e.target.value)} placeholder="e.g. 18" inputMode="decimal" />
+            </div>
+          </div>
+        )}
+
+        {mode === "SQUARE_RECT" && (
+          <div className="grid">
+            <div className="field">
+              <label>Height</label>
+              <input value={heightIn} onChange={(e) => setHeightIn(e.target.value)} placeholder="e.g. 10" inputMode="decimal" />
+            </div>
+            <div className="field">
+              <label>Width</label>
+              <input value={widthIn} onChange={(e) => setWidthIn(e.target.value)} placeholder="e.g. 20" inputMode="decimal" />
+            </div>
+          </div>
+        )}
+
+        {(mode === "CAPSULE" || mode === "HALF_CAPSULE") && (
+          <div className="grid">
+            <div className="field">
+              <label>H</label>
+              <input value={H} onChange={(e) => setH(e.target.value)} placeholder="e.g. 36" inputMode="decimal" />
+            </div>
+            <div className="field">
+              <label>W</label>
+              <input value={W} onChange={(e) => setW(e.target.value)} placeholder="e.g. 22" inputMode="decimal" />
+            </div>
+          </div>
+        )}
+
+        <div className="divider" />
+
+        <div className="sectionTitle">Outputs (Rounded)</div>
+
+        <div className="tableWrap">
+          <table className="table">
+            <thead>
+              <tr>
+                <th>Output</th>
+                <th className="right">Value</th>
+              </tr>
+            </thead>
+            <tbody>
+              {outputs.map((o) => (
+                <tr key={o.label}>
+                  <td className="outLabel">{o.label}</td>
+                  <td className="right outValue">
+                    {fmt(o.value)}{o.unit ? <span className="unit"> {o.unit}</span> : null}
+                  </td>
+                </tr>
+              ))}
+              {outputs.length === 0 && (
+                <tr>
+                  <td colSpan={2} className="empty">No outputs</td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        <div className="actions">
           <button className="primary" disabled={!isNameValid} onClick={downloadPdf} type="button">
             Download PDF
           </button>
