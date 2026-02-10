@@ -3,5 +3,5 @@ import react from '@vitejs/plugin-react'
 
 export default defineConfig({
   plugins: [react()],
-  base: '/ssglass/formula-pdf-app/', // <-- must match your GitHub repo name
+  base: '/ssglass/', // <-- must match your GitHub repo name
 })
