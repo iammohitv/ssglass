@@ -24,8 +24,10 @@ jobs:
           node-version: 20
           cache: npm
 
-      - run: npm ci
-      - run: npm run build
+      - name: Build
+        run: npm run build
+        env:
+          VITE_APP_USERS: ${{ secrets.VITE_APP_USERS }}
 
       - uses: actions/upload-pages-artifact@v3
         with:
