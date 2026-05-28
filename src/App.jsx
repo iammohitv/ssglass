@@ -40,74 +40,6 @@ function safeFileName(name) {
   );
 }
 
-// ===== USERS FROM ENV (ROBUST) =====
-function normalizeEnvString(raw) {
-  if (raw == null) return "";
-  let s = String(raw).trim();
-
-  // Strip wrapping quotes if they exist
-  if (
-    (s.startsWith("'") && s.endsWith("'")) ||
-    (s.startsWith('"') && s.endsWith('"'))
-  ) {
-    s = s.slice(1, -1).trim();
-  }
-
-  return s;
-}
-
-function getUsersFromEnv() {
-  const raw = import.meta.env.VITE_APP_USERS;
-  const s = normalizeEnvString(raw);
-
-  if (!s) {
-    return {
-      users: [],
-      error: "No users configured. VITE_APP_USERS is missing in the deployed build.",
-    };
-  }
-
-  try {
-    // Attempt #1: parse normal JSON
-    let parsed = JSON.parse(s);
-
-    // If it parsed into a STRING, it’s double-encoded JSON -> parse again
-    if (typeof parsed === "string") {
-      parsed = JSON.parse(parsed);
-    }
-
-    if (!Array.isArray(parsed)) {
-      return {
-        users: [],
-        error: "VITE_APP_USERS must be a JSON array like [{\"u\":\"admin\",\"p\":\"admin123\"}].",
-      };
-    }
-
-    const users = parsed
-      .filter((x) => x && typeof x.u === "string" && typeof x.p === "string")
-      .map((x) => ({ u: x.u.trim(), p: x.p }));
-
-    if (!users.length) {
-      return {
-        users: [],
-        error: "VITE_APP_USERS parsed but no valid users found.",
-      };
-    }
-
-    return { users, error: "" };
-  } catch {
-    return {
-      users: [],
-      error: "VITE_APP_USERS is not valid JSON. Use double quotes only.",
-    };
-  }
-}
-
-function verifyLogin(username, password, users) {
-  const u = (username || "").trim();
-  const p = password || "";
-  return users.some((x) => x.u === u && x.p === p);
-}
 
 // ===== FORMULAS =====
 function calcRound({ size }) {
@@ -255,71 +187,8 @@ function drawTable(doc, startX, startY, tableWidth, rows, options = {}) {
   return y;
 }
 
-// ===== Login =====
-function Login({ onLogin }) {
-  const { users, error } = useMemo(() => getUsersFromEnv(), []);
-  const [username, setUsername] = useState("");
-  const [password, setPassword] = useState("");
-  const [err, setErr] = useState("");
-
-  const submit = (e) => {
-    e.preventDefault();
-    setErr("");
-
-    if (users.length === 0) {
-      setErr(error || "No users configured. Add VITE_APP_USERS in your .env file.");
-      return;
-    }
-
-    if (!verifyLogin(username, password, users)) {
-      setErr("Invalid username or password.");
-      return;
-    }
-
-    const u = username.trim();
-    localStorage.setItem("ssg_auth_user", u);
-    onLogin(u);
-  };
-
-  return (
-    <div className="page">
-      <div className="card">
-        <div className="header">
-          <div>
-            <h1>SSG Glass Frame Calculator</h1>
-            <p className="sub">Login to access the calculator.</p>
-          </div>
-          <div className="badge">Login</div>
-        </div>
-
-        <div className="divider" />
-
-        <form onSubmit={submit} className="controls">
-          <div className="field grow">
-            <label>Username</label>
-            <input value={username} onChange={(e) => setUsername(e.target.value)} placeholder="e.g. admin" />
-          </div>
-
-          <div className="field grow">
-            <label>Password</label>
-            <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" />
-          </div>
-
-          {(err || (users.length === 0 && error)) && <div className="hint">{err || error}</div>}
-
-          <div className="actions">
-            <button className="primary" type="submit" disabled={!username.trim() || !password}>
-              Login
-            </button>
-          </div>
-        </form>
-      </div>
-    </div>
-  );
-}
-
 // ===== Calculator =====
-function Calculator({ authedUser, onLogout }) {
+function Calculator() {
   const [mode, setMode] = useState("ROUND");
   const [name, setName] = useState("");
 
@@ -359,8 +228,7 @@ function Calculator({ authedUser, onLogout }) {
     doc.setFontSize(13);
     doc.text(`Sheet: ${modeLabel}`, 14, 28);
     doc.text(`Name: ${name.trim()}`, 14, 36);
-    doc.text(`User: ${authedUser}`, 14, 44);
-    doc.text(`Date: ${new Date().toLocaleString()}`, 14, 52);
+    doc.text(`Date: ${new Date().toLocaleString()}`, 14, 44);
 
     doc.setLineWidth(0.4);
     doc.line(14, 57, 196, 57);
@@ -435,21 +303,9 @@ function Calculator({ authedUser, onLogout }) {
         <div className="header">
           <div>
             <h1>SSG Glass Frame Calculator</h1>
-            <p className="sub">
-              Logged in as <b>{authedUser}</b> • Select a sheet → enter inputs → outputs → name → PDF
-            </p>
+            <p className="sub">Select a sheet → enter inputs → outputs → name → PDF</p>
           </div>
-          <div className="badge">
-            {modeLabel} •{" "}
-            <button
-              onClick={onLogout}
-              style={{ border: "none", background: "transparent", fontWeight: 900, cursor: "pointer" }}
-              title="Logout"
-              type="button"
-            >
-              Logout
-            </button>
-          </div>
+          <div className="badge">{modeLabel}</div>
         </div>
 
         <div className="controls">
@@ -550,16 +406,6 @@ function Calculator({ authedUser, onLogout }) {
   );
 }
 
-// ===== App (auth gate only) =====
 export default function App() {
-  const [authedUser, setAuthedUser] = useState(() => localStorage.getItem("ssg_auth_user") || "");
-
-  const logout = () => {
-    localStorage.removeItem("ssg_auth_user");
-    setAuthedUser("");
-  };
-
-  if (!authedUser) return <Login onLogin={setAuthedUser} />;
-
-  return <Calculator authedUser={authedUser} onLogout={logout} />;
+  return <Calculator />;
 }
